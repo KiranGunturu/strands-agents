@@ -21,6 +21,7 @@ commands.
 - [Tools](#tools)
 - [Where AgentCore fits](#where-agentcore-fits)
 - [Project files](#project-files)
+- [Streamlit CloudOps app](#streamlit-cloudops-app)
 - [Quickstart](#quickstart)
 - [Getting it running](#getting-it-running)
 - [Deploy to AgentCore](#deploy-to-agentcore)
@@ -117,6 +118,7 @@ flowchart LR
 ```text
 StrandsAgents/
 ├── weather_aws_strands.py   # main agent script (the AgentCore entrypoint)
+├── cloudops_streamlit.py    # Streamlit CloudOps chat app
 ├── requirements.txt         # deps: strands-agents, strands-agents-tools, bedrock-agentcore
 ├── agents/                  # local virtual environment
 └── README.md
@@ -157,6 +159,28 @@ export AWS_REGION=us-west-2
 ```bash
 python weather_aws_strands.py
 ```
+
+## Streamlit CloudOps app
+
+Launch the interactive CloudOps assistant from the project folder:
+
+```bash
+streamlit run cloudops_streamlit.py
+```
+
+The home page includes sample questions about S3, EC2, incident triage, weather,
+and AWS operations. The app uses the AWS SDK credential chain for Bedrock and AWS
+account access. Set `AWS_REGION` or `AWS_DEFAULT_REGION` to choose the Bedrock
+region, and set `BEDROCK_MODEL_ID` to override the default model:
+
+```powershell
+$env:AWS_REGION = "us-west-2"
+$env:BEDROCK_MODEL_ID = "global.anthropic.claude-sonnet-4-6"
+streamlit run cloudops_streamlit.py
+```
+
+The assistant is configured to prefer read-only inspection. It asks for
+confirmation before destructive or state-changing operations.
 
 ## Getting it running
 
@@ -340,6 +364,12 @@ How is the weather in Sydney, Australia?
 > now also publishes a newer standalone AgentCore CLI alongside the
 > `bedrock-agentcore-starter-toolkit` used here. Confirm current command names
 > against the AWS docs before a production rollout.
+
+## Streamlit Application
+
+![alt text](images/sp.png)
+
+![alt text](images/lambda.png)
 
 ## License
 
