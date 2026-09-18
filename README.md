@@ -367,6 +367,8 @@ How is the weather in Sydney, Australia?
 
 ## Streamlit Application
 
+![alt text](/images/se.png)
+
 ![alt text](images/sp.png)
 
 ![alt text](images/lambda.png)
