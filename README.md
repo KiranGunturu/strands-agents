@@ -1,4 +1,4 @@
-# Strands Weather Agent
+# AWS Strands Agents
 
 **Ask about the weather in plain English.** A Strands agent, backed by an Amazon
 Bedrock model, that answers time / weather / AWS questions in one go — choosing and
@@ -22,6 +22,7 @@ commands.
 - [Where AgentCore fits](#where-agentcore-fits)
 - [Project files](#project-files)
 - [Quickstart](#quickstart)
+- [Getting it running](#getting-it-running)
 - [Deploy to AgentCore](#deploy-to-agentcore)
 - [Runtime permissions: local vs deployed](#runtime-permissions-local-vs-deployed)
 - [Observability](#observability)
@@ -73,6 +74,12 @@ The agent uses Strands' built-in tools — no schemas or descriptions to write:
 
 Strands ships a library of ready-made tools (around 20), and you can add your own —
 all in one concise codebase, with no per-tool Lambda functions to build.
+
+Because `http_request` can call any URL, the agent picks the weather API itself. Left
+alone it tends to reach for a keyed provider (OpenWeatherMap) and fail on the missing
+key, so the system prompt steers it to **Open-Meteo** (`open-meteo.com`) — geocoding
+and forecast endpoints that need **no API key**. That keeps the whole demo running on
+nothing but your AWS credentials.
 
 ## Where AgentCore fits
 
@@ -150,6 +157,35 @@ export AWS_REGION=us-west-2
 ```bash
 python weather_aws_strands.py
 ```
+
+## Getting it running
+
+A first run rarely works cold. Here's the path from a fresh clone to a clean run,
+and the fix at each gate:
+
+```mermaid
+flowchart TD
+    A["python weather_aws_strands.py"] --> B{"Bedrock model access?"}
+    B -->|"ResourceNotFoundException:<br/>use case details not submitted"| B1["Submit the Anthropic<br/>use-case form, then wait"]
+    B1 --> B
+    B -->|OK| C{"Weather API needs a key?"}
+    C -->|"401 Unauthorized<br/>(appid=YOUR_API_KEY)"| C1["Point the prompt at<br/>Open-Meteo (keyless)"]
+    C1 --> C
+    C -->|OK| D{"use_aws has permission?"}
+    D -->|"AccessDenied on S3"| D1["Grant the role<br/>(local: your creds; cloud: runtime role)"]
+    D1 --> D
+    D -->|OK| E["Clean run:<br/>weather for all cities + S3 buckets"]
+```
+
+What each gate means:
+
+1. **Bedrock model access.** Anthropic models need a one-time **use-case form** before they'll answer. The old "Model access" console page is retired — serverless models auto-enable on first invocation, but Claude still surfaces the form when you open it in the Model catalog / Playground or call `InvokeModel`/`Converse`. It appears as `ResourceNotFoundException: Model use case details have not been submitted`. In an org with SCPs, also confirm no Service Control Policy denies Bedrock. Region and model id must match (here `us-west-2` / `global.anthropic.claude-sonnet-4-6`).
+2. **Keyless weather API.** The agent defaults to a keyed provider and fails with `401 Unauthorized` and a literal `appid=YOUR_API_KEY`. Steering the prompt to **Open-Meteo** removes the key entirely — geocoding then forecast, both `200 OK`.
+3. **`use_aws` permissions.** Locally this uses your own credentials, so it just works. Once deployed, it runs under the runtime execution role — grant that role the services your tools touch (see [Runtime permissions](#runtime-permissions-local-vs-deployed)).
+
+Once all three clear, a single prompt returns time + weather for every city and your
+S3 bucket list — and the agent self-corrects along the way (for example, retrying a
+geocoding lookup with an explicit country when the first search returns no match).
 
 ## Deploy to AgentCore
 
@@ -292,10 +328,13 @@ How is the weather in Sydney, Australia?
 ## Troubleshooting
 
 - **`NoCredentialsError` (local)** — run `aws configure`, or set `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION`.
+- **`ResourceNotFoundException: Model use case details have not been submitted`** — this is model access, not a missing resource. The console "Model access" page is retired; open the Anthropic model in the Model catalog / Playground (or call `InvokeModel`/`Converse`) to trigger the one-time **use-case form**, submit it, and retry after ~15 minutes. Match the region and model id in the error.
+- **Weather calls return `401 Unauthorized` with `appid=YOUR_API_KEY`** — the agent chose a keyed provider (OpenWeatherMap) and has no key. Steer the prompt to a keyless API like **Open-Meteo**; no key needed.
 - **`AccessDenied` from a tool after deploying** — the runtime execution role lacks that service's permission (see [Runtime permissions](#runtime-permissions-local-vs-deployed)). Attach the needed policy to the runtime role.
-- **`AccessDeniedException` on Bedrock** — the model isn't enabled for your account/region, or the role lacks `bedrock:InvokeModel`. Request model access in the Bedrock console.
+- **`AccessDeniedException` on Bedrock** — the role lacks `bedrock:InvokeModel`, or an org **SCP** denies Bedrock. Check both; the SCP is an admin-level fix.
 - **Deploy fails creating roles / CodeBuild / ECR** — your caller identity lacks the toolkit's operational permissions; supply pre-created role ARNs to `agentcore configure` or widen your permissions.
 - **Wrong region** — the runtime defaults to `us-west-2`; set your region explicitly if your model or resources live elsewhere.
+- **`current_time` deprecation warning** — becomes an error log in `strands_tools` v0.9.0; migrate to injecting the time as context (`ContextInjector`).
 
 > **Preview & tooling note.** AgentCore is in **preview** and evolving quickly; AWS
 > now also publishes a newer standalone AgentCore CLI alongside the

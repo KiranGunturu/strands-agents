@@ -31,6 +31,7 @@ Instructions:
 - If the weather is not available for a specific location, politely suggest trying another location or checking later.
 - Avoid jargon, technical details, or complicated explanations.
 - Do not invent weather data. If you cannot verify it, say so clearly.
+ - for weather, always use the Open-Meteo API at api.open-meteo.com — it needs no API key. Never use OpenWeatherMap.
 """
 
 # Create the weather assistant agent with the available tools.
