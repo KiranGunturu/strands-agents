@@ -1,10 +1,14 @@
 import logging
+from bedrock_agentcore import BedrockAgentCoreApp
 from strands import Agent
 from strands.vended_tools import http_request, web_fetch
 from strands_tools import current_time, use_aws
+from bedrock_agentcore import BedrockAgentCoreApp
 
 # Set up basic logging so messages can be seen during runtime.
 logging.basicConfig(level=logging.INFO)
+
+app = BedrockAgentCoreApp()
 
 # Instructions for the weather agent.
 WEATHEER_HOTEL_SYSTEM_PROMPT = """
@@ -55,4 +59,23 @@ query = """
 """
 
 # Run the agent with the sample query.
-response = subject_expert(query)
+#response = subject_expert(query)
+
+@app.entrypoint
+def invoke_agent(query: str) -> str:
+    """Entrypoint for the weather agent."""
+    sample_query = """
+        Answer the following questions:
+    
+        1. What is the current weather in New York City?
+        2. What’s the weather like in Tokyo, Japan?
+        3. Can you provide the weather forecast for London, UK?
+        4. How is the weather in Sydney, Australia?
+        5. Check the weather in Guntur, AP, India”
+        6. list all s3 buckets in my AWS account
+        """
+    response = subject_expert(sample_query)
+    return {"result":response.message}
+
+if __name__ == "__main__":
+    app.run()

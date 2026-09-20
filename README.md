@@ -108,7 +108,7 @@ flowchart LR
     subgraph Run ["Run it on AWS"]
         AC["AgentCore Runtime<br/>serverless microVMs"]
     end
-    S -->|agentcore configure / launch| AC
+    S -->|AgentCore CLI| AC
     O --> AC
     BA -. self-managed alternative .-> AC
 ```
@@ -213,8 +213,9 @@ geocoding lookup with an explicit country when the first search returns no match
 
 ## Deploy to AgentCore
 
-Deployment turns your script and `requirements.txt` into a container and hosts it on
-a managed **AgentCore Runtime** with an HTTPS endpoint — all from two commands.
+Deployment turns your agent into a managed **AgentCore Runtime** with an HTTPS
+endpoint. Use the supported AgentCore CLI rather than the retired Python starter
+toolkit.
 
 ```mermaid
 flowchart TD
@@ -222,11 +223,11 @@ flowchart TD
         PY["weather_aws_strands.py"]
         REQ["requirements.txt"]
     end
-    PY --> CFG["agentcore configure"]
+    PY --> CFG["AgentCore CLI"]
     REQ --> CFG
-    CFG --> DOCKER["Dockerfile + config<br/>(generated, incl. OpenTelemetry)"]
-    DOCKER --> LAUNCH["agentcore launch"]
-    LAUNCH --> S3["Amazon S3<br/>source.zip"]
+    CFG --> DOCKER["Deployment configuration<br/>(including observability)"]
+    DOCKER --> LAUNCH["AgentCore deployment"]
+    LAUNCH --> S3["Amazon S3<br/>source package"]
     S3 --> CB["AWS CodeBuild<br/>builds ARM64 image"]
     CB --> ECR["Amazon ECR<br/>container image"]
     ECR --> RT["AgentCore Runtime<br/>+ endpoint (agent ARN)"]
@@ -254,21 +255,14 @@ if __name__ == "__main__":
 **Deploy**
 
 ```bash
-pip install bedrock-agentcore-starter-toolkit
+npm install -g @aws/agentcore
 
-# Interactive: creates the execution role, an ECR repo, detects requirements.txt,
-# offers an OAuth authorizer, and writes a Dockerfile + bedrock_agentcore.yaml.
-agentcore configure -e weather_aws_strands.py
-
-# CodeBuild builds an ARM64 image (no local Docker), pushes to ECR,
-# provisions the runtime, wires CloudWatch, and prints the agent ARN.
-agentcore launch
-
-agentcore launch --local     # optional: build & run locally at http://localhost:8080
-agentcore invoke '{"prompt": "What is the weather in Tokyo, Japan?"}'
+# Import this existing agent and follow the CLI prompts.
+agentcore import
 ```
 
-**What `agentcore launch` creates**, step by step:
+The current AgentCore CLI is distributed through npm. Use `agentcore --help` after
+installation for the current import, development, and deployment commands.
 
 ```mermaid
 sequenceDiagram
@@ -278,9 +272,9 @@ sequenceDiagram
     participant CB as CodeBuild
     participant ECR as Amazon ECR
     participant RT as AgentCore Runtime
-    Dev->>CLI: agentcore configure -e app.py
+    Dev->>CLI: agentcore import
     CLI-->>Dev: Dockerfile + config, IAM role, ECR repo, OAuth prompt
-    Dev->>CLI: agentcore launch
+    Dev->>CLI: deploy from CLI
     CLI->>S3: upload code + requirements + Dockerfile (source.zip)
     S3->>CB: trigger build from buildspec
     CB->>ECR: push ARM64 container image
@@ -290,10 +284,9 @@ sequenceDiagram
     RT-->>Dev: response (logs & traces in CloudWatch)
 ```
 
-You can watch each artifact appear: an S3 bucket like
-`bedrock-agentcore-...codebuild` holding `source.zip`, a CodeBuild project running
-the buildspec (think Jenkinsfile), the image in an ECR repo, and a versioned runtime
-under **Bedrock AgentCore → Agent Runtime**. The runtime defaults to **us-west-2**.
+You can watch deployment artifacts appear: an S3 source package, build output,
+the image in an ECR repo, and a versioned runtime under **Bedrock AgentCore → Agent
+Runtime**. The runtime defaults to **us-west-2**.
 
 ## Runtime permissions: local vs deployed
 
@@ -322,8 +315,8 @@ that makes the tool work; don't widen it further than necessary.
 
 ## Observability
 
-`agentcore configure` adds **OpenTelemetry** to the generated Dockerfile, so the
-deployed agent emits traces and metrics automatically. In **CloudWatch → GenAI
+The deployed agent emits traces and metrics through the AgentCore observability
+integration. In **CloudWatch → GenAI
 Observability** you get per-invocation traces, latency, and token metrics, and the
 launch process creates log groups such as
 `/aws/bedrock-agentcore/runtimes/<agent>-<id>`. To see traces, enable **CloudWatch
@@ -356,14 +349,12 @@ How is the weather in Sydney, Australia?
 - **Weather calls return `401 Unauthorized` with `appid=YOUR_API_KEY`** — the agent chose a keyed provider (OpenWeatherMap) and has no key. Steer the prompt to a keyless API like **Open-Meteo**; no key needed.
 - **`AccessDenied` from a tool after deploying** — the runtime execution role lacks that service's permission (see [Runtime permissions](#runtime-permissions-local-vs-deployed)). Attach the needed policy to the runtime role.
 - **`AccessDeniedException` on Bedrock** — the role lacks `bedrock:InvokeModel`, or an org **SCP** denies Bedrock. Check both; the SCP is an admin-level fix.
-- **Deploy fails creating roles / CodeBuild / ECR** — your caller identity lacks the toolkit's operational permissions; supply pre-created role ARNs to `agentcore configure` or widen your permissions.
+- **Deploy fails creating AWS resources** — your caller identity lacks the required IAM permissions; use the supported AgentCore CLI prompts and either grant the required permissions or provide pre-created resource roles when offered.
 - **Wrong region** — the runtime defaults to `us-west-2`; set your region explicitly if your model or resources live elsewhere.
 - **`current_time` deprecation warning** — becomes an error log in `strands_tools` v0.9.0; migrate to injecting the time as context (`ContextInjector`).
 
-> **Preview & tooling note.** AgentCore is in **preview** and evolving quickly; AWS
-> now also publishes a newer standalone AgentCore CLI alongside the
-> `bedrock-agentcore-starter-toolkit` used here. Confirm current command names
-> against the AWS docs before a production rollout.
+> **Tooling note.** AgentCore is evolving quickly. Use the standalone `@aws/agentcore`
+> CLI and its built-in help for the current commands.
 
 ## Streamlit Application
 
@@ -372,6 +363,59 @@ How is the weather in Sydney, Australia?
 ![alt text](images/sp.png)
 
 ![alt text](images/lambda.png)
+
+## Configure Agentcore
+![alt text](images/ac.png)
+
+## Agentcore configuration success
+
+![alt text](images/cs.png)
+
+## Launching agentcore
+
+![alt text](/images/al.png)
+
+## Launch Succeeded
+
+![alt text](images/ls.png)
+
+## S3 Code Upload
+
+![alt text](images/s3.png)
+
+## Code Build
+
+![alt text](/images/cb.png)
+
+## ECR
+
+![alt text](images/ecr.png)
+
+## Agentcore Runtime
+
+![alt text](/images/agentruntime.png)
+
+## Invoke Agent
+
+![alt text](/images/invoke1.png)
+
+![alt text](/images/invoke2.png)
+
+## Gen AI Observability
+
+![alt text](/images/obse.png)
+
+## Logs
+
+![alt text](/images/logs.png)
+
+## IAM 
+
+![alt text](/image/IAM.png)
+
+## S3 Listing
+
+![alt text](/image/s3list.png)
 
 ## License
 
