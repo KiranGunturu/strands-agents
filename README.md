@@ -411,11 +411,11 @@ How is the weather in Sydney, Australia?
 
 ## IAM 
 
-![alt text](/image/IAM.png)
+![alt text](/images/IAM.png)
 
 ## S3 Listing
 
-![alt text](/image/s3list.png)
+![alt text](/images/s3list.png)
 
 ## License
 
